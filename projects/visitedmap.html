@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>訪問市区町村マップ</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
+  ></script>
+  <style>
+    #map { height: 90vh; width: 100%; }
+    body { font-family: sans-serif; margin: 0; }
+    .popup-btn {
+      margin: 2px;
+      padding: 4px 8px;
+      font-size: 14px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<h2 style="text-align:center;">訪問済み市区町村マップ</h2>
+<div id="map"></div>
+
+<script>
+  const map = L.map('map').setView([35.5, 135.5], 6);
+
+  L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+    attribution: '&copy; Google'
+  }).addTo(map);
+
+  const visitedLevels = {};  // 市区町村名 → レベル
+
+  const levelColors = {
+    1: '#999',     // 通過
+    2: '#fbb03b',  // 立ち寄り
+    3: '#e55e00'   // 堪能
+  };
+
+  function getColor(level) {
+    return levelColors[level] || '#ccc';
+  }
+
+  // GeoJSON読み込み（←あなたのデータに差し替えてください）
+  fetch('path/to/japan-municipalities.geojson')
+    .then(res => res.json())
+    .then(data => {
+      L.geoJSON(data, {
+        style: feature => {
+          const name = feature.properties.name;
+          const level = visitedLevels[name];
+          return {
+            color: '#444',
+            weight: 1,
+            fillColor: getColor(level),
+            fillOpacity: level ? 0.7 : 0.1
+          };
+        },
+        onEachFeature: (feature, layer) => {
+          const name = feature.properties.name;
+
+          layer.on('click', () => {
+            const container = document.createElement("div");
+            container.innerHTML = `
+              <b>${name}</b><br>訪問レベルを選んでください：<br>
+              <button class="popup-btn" data-level="1">通過</button>
+              <button class="popup-btn" data-level="2">立ち寄り</button>
+              <button class="popup-btn" data-level="3">堪能</button>
+              <button class="popup-btn" data-level="cancel">キャンセル</button>
+            `;
+
+            const popup = L.popup()
+              .setLatLng(layer.getBounds().getCenter())
+              .setContent(container)
+              .openOn(map);
+
+            container.querySelectorAll(".popup-btn").forEach(btn => {
+              btn.addEventListener("click", () => {
+                const value = btn.getAttribute("data-level");
+                if (value === "cancel") {
+                  map.closePopup();
+                  return;
+                }
+                const numLevel = parseInt(value);
+                visitedLevels[name] = numLevel;
+
+                layer.setStyle({
+                  fillColor: getColor(numLevel),
+                  fillOpacity: 0.7
+                });
+
+                layer.bindPopup(`${name}<br>レベル${numLevel}：${["","通過しました","立ち寄りました","堪能しました"][numLevel]}`);
+                layer.openPopup();
+              });
+            });
+          });
+        }
+      }).addTo(map);
+    });
+</script>
+
+</body>
+</html>
